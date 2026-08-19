@@ -24,8 +24,8 @@
     "node": ">=22.18.0"
   },
   "bin": {
-    "exciton": "./dist/cli.js",
-    "xc": "./dist/cli.js"
+    "exciton": "dist/cli.js",
+    "xc": "dist/cli.js"
   },
   "files": [
     "dist",
