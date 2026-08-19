@@ -1,0 +1,38 @@
+{
+  "name": "exciton",
+  "version": "0.1.0",
+  "description": "Run Claude Code with an agentic framework dialled to the level the task deserves — for one session, without changing anything else.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "plugins",
+    "superpowers",
+    "cli",
+    "agentic",
+    "session"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "exciton": "./dist/cli.js",
+    "xc": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build && npm test",
+    "test": "node --test --test-concurrency=2 test/*.test.ts",
+    "test:integration": "node --test --test-concurrency=2 test/integration/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^5.7.0"
+  },
+  "license": "MIT"
+}
