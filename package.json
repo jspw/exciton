@@ -35,6 +35,7 @@
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build && npm test",
+    "postversion": "git push --follow-tags",
     "test": "node --test --test-concurrency=2 test/*.test.ts",
     "test:integration": "node --test --test-concurrency=2 test/integration/*.test.ts"
   },

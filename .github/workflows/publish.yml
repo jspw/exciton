@@ -1,0 +1,49 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Two merges in quick succession must not race each other to the registry.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # provenance attestation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+
+      # package.json's version is the release trigger. An ordinary merge leaves
+      # it alone and this job does nothing; a merge that bumps it ships.
+      - id: guard
+        run: |
+          set -euo pipefail
+          local_version=$(node -p "require('./package.json').version")
+          published=$(npm view exciton version 2>/dev/null || echo none)
+          echo "local=$local_version published=$published"
+          if [ "$local_version" = "$published" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::exciton@$local_version is already on the registry — nothing to publish."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::publishing exciton@$local_version (registry has $published)."
+          fi
+
+      # prepublishOnly rebuilds and runs the unit tests, so a broken build
+      # cannot ship even if someone bumps the version by hand.
+      - if: steps.guard.outputs.publish == 'true'
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_ACCESS_TOKEN }}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, symlinkSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -140,8 +140,17 @@ test('an unmanaged plugin is refused, naming it and what exciton does manage', (
  * check the status the top-level handler actually exits with.
  */
 test('refusing an unmanaged plugin exits non-zero', () => {
+  // Resolve through a directory rather than the bare name `warp`: a bare name
+  // only resolves where that plugin is installed, so asserting on it would pass
+  // on the author's machine and fail on any CI runner, for the wrong reason.
+  const dir = mkdtempSync(join(tmpdir(), 'xc-warp-'));
+  mkdirSync(join(dir, '.claude-plugin'));
+  writeFileSync(
+    join(dir, '.claude-plugin', 'plugin.json'),
+    JSON.stringify({ name: 'warp', version: '2.1.0' }),
+  );
   const cli = new URL('../src/cli.ts', import.meta.url).pathname;
-  const proc = spawnSync(process.execPath, [cli, 'warp'], { encoding: 'utf8' });
+  const proc = spawnSync(process.execPath, [cli, dir], { encoding: 'utf8' });
   assert.equal(proc.status, 1);
   assert.match(proc.stderr, /does not manage warp/);
 });
