@@ -76,7 +76,7 @@ Full detail, including the verification log: [MECHANISM.md](MECHANISM.md).
 
 ## Requirements
 
-- Node ≥ 24
+- Node ≥ 22.18 (running the tests needs the unflagged TypeScript stripping added there)
 - Claude Code on your `PATH`
 - macOS or Linux (Windows is not supported)
 - `git`, for fetching a framework you don't already have installed

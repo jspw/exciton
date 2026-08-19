@@ -11,9 +11,17 @@
     "agentic",
     "session"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jspw/exciton.git"
+  },
+  "homepage": "https://github.com/jspw/exciton#readme",
+  "bugs": {
+    "url": "https://github.com/jspw/exciton/issues"
+  },
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=22.18.0"
   },
   "bin": {
     "exciton": "./dist/cli.js",

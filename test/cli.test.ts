@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, symlinkSync, realpathSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -130,6 +131,19 @@ test('naming nothing is accepted — bare exciton is a pass-through', () => {
 test('an unmanaged plugin is refused, naming it and what exciton does manage', () => {
   assert.throws(() => assertManaged([resolved('warp')]), /warp/);
   assert.throws(() => assertManaged([resolved('warp')]), /superpowers/);
+});
+
+/**
+ * The refusal reaches the shell as a failure, not just as prose on stderr.
+ * assertManaged throwing is only half the promise — a script that runs
+ * `exciton warp` has to be able to detect it, so spawn the real CLI and
+ * check the status the top-level handler actually exits with.
+ */
+test('refusing an unmanaged plugin exits non-zero', () => {
+  const cli = new URL('../src/cli.ts', import.meta.url).pathname;
+  const proc = spawnSync(process.execPath, [cli, 'warp'], { encoding: 'utf8' });
+  assert.equal(proc.status, 1);
+  assert.match(proc.stderr, /does not manage warp/);
 });
 
 test('the refusal lists every unmanaged name at once', () => {
