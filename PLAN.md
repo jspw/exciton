@@ -1,8 +1,21 @@
 # exciton v1 Implementation Plan
 
-> ## ⚠️ EXECUTED AND PARTLY SUPERSEDED — 2026-08-16
+> ## ⚠️ HISTORICAL RECORD — superseded by 1.0.0 (2026-08-21)
 >
-> All 12 tasks were built and are passing (74 unit + 6 integration tests). **This document is now a historical record, not a specification.** The code deviates from it in the following ways; where they disagree, **the code and [MECHANISM.md](MECHANISM.md) are correct.**
+> **Do not implement from this document.** It planned v1 (0.1.x) and was executed in full; 1.0.0 then reshaped the product around a registry and an onboarding step, which this plan predates entirely. Where they disagree, **the code, [PRODUCT.md](PRODUCT.md) and [MECHANISM.md](MECHANISM.md) are correct.** Kept for the reasoning behind decisions that still hold.
+>
+> ### What 1.0.0 changed (none of it is described below)
+>
+> - **A framework must be `add`ed before it runs.** `~/.exciton/config.json` records which frameworks are added and which copy each runs from (`installed` = Claude's, `own` = exciton's clone). `onboardedAt` separates "never onboarded" from "onboarded and chose nothing".
+> - **First invocation runs a walkthrough** — philosophy, then a picker for zero, one, or several frameworks. Triggered on first run, not npm `postinstall`, which cannot prompt.
+> - **Verb set is `add` / `remove` / `update` / `list` / `clean`.** `fetch` is gone; `add` warms the cache as a side effect of a real decision.
+> - **No version selection.** `name@ref` was removed entirely; exciton clones the newest release tag. This deleted the collision with Claude's own `name@marketplace` plugin ids rather than fixing it — see MECHANISM.md § Versions.
+> - **An interactive layer exists** (`prompt.ts`, `ui.ts`, `onboarding.ts`) — hand-rolled arrow-key prompts and a single message shape, still with zero runtime dependencies.
+> - **Enterprise-locked frameworks are refused**, not warned about, and `clean` refuses while a session is running from the cache.
+>
+> ### v1 deviations, recorded when this plan was executed
+>
+> All 12 tasks were built and passing (74 unit + 6 integration tests at the time; 189 + 6 as of 1.0.0). The code deviated from the plan as follows:
 >
 > **1 · Scope reversed — the big one.** The architecture line below, Task 2, and Task 9 all specify *disable every enabled plugin, then add back what was named*. That was built, tested against a live session, and **rejected**. exciton suppresses **only the frameworks it manages and you named** (`src/frameworks.ts`, currently `{superpowers}`); every other plugin id is absent from the payload and keeps working normally. Task 2's `collectPluginIds` still enumerates all scopes — correctly — but `idsForNames` now selects from that list.
 >

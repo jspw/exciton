@@ -188,7 +188,9 @@ exciton superpowers spec-kit     → refused; frameworks are mutually exclusive
 exciton spec-kit                 → suppresses superpowers too, though unnamed
 ```
 
-Bare `exciton` is a usage error rather than a mode. With no framework named the payload would be empty and the launch byte-identical to plain `claude` — a reason to type `claude`, not `exciton`.
+Bare `exciton` is a usage error rather than a mode — *after* onboarding. With no framework named the payload would be empty and the launch byte-identical to plain `claude`, a reason to type `claude`, not `exciton`. Before onboarding it is the walkthrough instead: the one case where naming nothing has something to say.
+
+A framework must also be **added** before it runs. `exciton superpowers` on a machine where it has not been added exits 1 and names the command that fixes it.
 
 ---
 
@@ -196,13 +198,18 @@ Bare `exciton` is a usage error rather than a mode. With no framework named the 
 
 ```
 ~/.exciton/
+  config.json                            # the registry — NOT cache
   src/                                   # tier-2 clones (fresh-machine path)
-    superpowers/<sha>/
+    superpowers/<version>/
   staged/                                # content-addressed, shared across sessions
     superpowers-6.3.0-a1b2c3d-nohooks/
 ```
 
-Two directories, both pure cache. `exciton clean` empties them; they rebuild on next use. **There is no run state anywhere** — which dissolves the crash-cleanup problem rather than solving it. No settings files are written: the `enabledPlugins` payload is passed inline as a JSON string.
+The two directories are pure cache. `exciton clean` empties them; they rebuild on next use. **There is no run state anywhere** — which dissolves the crash-cleanup problem rather than solving it. No settings files are written: the `enabledPlugins` payload is passed inline as a JSON string.
+
+`config.json` is the exception, and the only durable thing exciton owns: which frameworks have been added, and which copy each runs from. It sits *outside* `staged/` and `src/` precisely so `clean` cannot take it — emptying the cache costs disk, never setup. A staged tree keyed on `(name, version, sha, profile)` is derivable; the registry is not.
+
+Clones are keyed by **released version**, not commit sha, because exciton tracks releases: it resolves the newest tag via `git ls-remote --tags --refs` and clones it in one `git clone --depth 1 --branch <tag>`. There is no version selector — see [§ Versions](#versions).
 
 ### The integrity invariant
 
@@ -286,3 +293,16 @@ Recorded because the errors are instructive, and because anyone re-deriving this
 **Root cause:** the investigation was empirical-first. Behavior was inferred from log lines whose meaning had not been established, with no documented baseline to check against. Two conclusions came out reversed, and a correct signal was discarded as noise because it disagreed with the wrong reading.
 
 **Rule adopted:** documentation first; measurement only to confirm, always labelled as one machine and one version.
+
+
+---
+
+## Versions
+
+exciton offers no choice of versions, deliberately. A framework is either the copy Claude already has — which Claude keeps current — or exciton's own copy at the newest release, refreshed by `exciton update`.
+
+That is a scope decision with a mechanical payoff. Claude Code identifies a plugin as `name@marketplace` (`superpowers@claude-plugins-official`), and that string is what appears in `settings.json` and therefore what people copy. Any `name@ref` version syntax collides with it head-on: exciton would read `claude-plugins-official` as a git ref and fail at `git fetch` with a message about a missing remote ref ✅ (observed 2026-08-20, before the syntax was dropped).
+
+Removing version selection removed the ambiguity rather than papering over it. With no ref meaning left, `@` has exactly one interpretation, the marketplace half is ignored, and the plugin id someone pastes resolves the way they expect.
+
+**Choosing which copy.** `resolvePlugin` prefers the installed copy, so `{ ownCopy: true }` exists to skip that lookup — without it, `source: 'own'` silently resolves to Claude's copy and the choice becomes decorative. Both the add path and the run path pass it from the registry.

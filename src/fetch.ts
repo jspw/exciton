@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, rmSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { srcDir } from './paths.ts';
 import type { PluginSource } from './marketplace.ts';
-import { UserError, note, dim } from './ui.ts';
+import { UserError, note } from './ui.ts';
 
 export type Runner = (cmd: string, args: string[], cwd?: string) => void;
 export type Capture = (cmd: string, args: string[]) => string;
@@ -18,8 +18,14 @@ export interface FetchDeps {
   run: Runner;
   capture: Capture;
   resolveDir: (name: string, key: string) => string;
-  /** Progress, so a slow clone is not silence. */
-  say: (line: string) => void;
+  /**
+   * Progress, as plain text.
+   *
+   * The caller decides how it looks: inside the walkthrough this becomes a step
+   * on the rail, and on its own it becomes a block. Emitting formatted output
+   * from here would force one shape on both.
+   */
+  say: (text: string) => void;
 }
 
 /**
@@ -88,7 +94,7 @@ export function cloneSource(name: string, src: PluginSource, deps: Partial<Fetch
   const run = deps.run ?? realRunner;
   const capture = deps.capture ?? realCapture;
   const resolveDir = deps.resolveDir ?? srcDir;
-  const say = deps.say ?? (line => process.stderr.write(line));
+  const say = deps.say ?? (text => process.stderr.write(note(text)));
 
   if (src.kind === 'unsupported') {
     throw new Error(`cannot fetch "${name}": ${src.reason}`);
@@ -99,7 +105,7 @@ export function cloneSource(name: string, src: PluginSource, deps: Partial<Fetch
   const target = resolveDir(name, tag ? version : 'head');
   if (existsSync(target)) return { dir: target, version };
 
-  say(note(`Fetching ${name} ${tag || 'latest'}`, [dim('One shallow clone; cached after this.')]));
+  say(`Fetching ${name} ${tag || 'latest'}`);
 
   const staging = `${target}.tmp-${process.pid}`;
   mkdirSync(dirname(target), { recursive: true });

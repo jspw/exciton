@@ -118,7 +118,7 @@ OTHER PLUGINS — untouched; your own settings govern these
 - **What injects into my session?** The `AUTO-FIRES` column, across both sections — including the plugins exciton will never touch. It reflects whether the plugin ships a `hooks/hooks.json` at all; naming the specific events is a later refinement.
 - **What can I type?** The `FRAMEWORKS` section. Without it the output is informative but not actionable: `resolve.ts` tells a user who mistyped a name to "check the name with `exciton list`", and that is only honest if the output names what exciton actually accepts.
 
-The split is the [scope distinction](#the-distinction-the-product-rests-on) made visible. A framework exciton supports but you have never installed still appears, marked `—`, because `exciton <name>` fetches it on demand — so the section is the runnable set, not the installed subset of it.
+The split is the [scope distinction](#the-distinction-the-product-rests-on) made visible. A framework exciton supports but you have never installed still appears, marked `—`, because `exciton add <name>` fetches it on demand — so the section is the runnable set, not the installed subset of it. The `ADDED` column is what decides whether a name will actually run.
 
 ---
 
@@ -178,7 +178,9 @@ The allow-list is real, but its universe is the framework set — not your plugi
 
 ## Non-goals
 
-- **Installing anything into Claude's plugin registry.** Plugins install **enabled by default** 📄, so installing superpowers would activate it in every ordinary `claude` session and in the VS Code extension — reproducing the exact problem this product removes. exciton fetches into its own cache instead. It has **no install command**, deliberately: installation is Claude's concept; exciton's concept is *use*.
+- **Installing anything into Claude's plugin registry.** Plugins install **enabled by default** 📄, so installing superpowers would activate it in every ordinary `claude` session and in the VS Code extension — reproducing the exact problem this product removes. exciton fetches into its own cache instead.
+
+`exciton add` is **not** an install command, and the distinction is the product. `claude plugin install` writes to `~/.claude` and enables a plugin in every session; `exciton add` records a choice in `~/.exciton/config.json` and changes nothing about how `claude` behaves. The onboarding says so in as many words, because someone asked to run a setup step deserves to know it costs them nothing globally.
 - **Modifying Claude's state.** exciton reads Claude's configuration and writes only inside `~/.exciton/` ✅.
 - **Modifying framework content.** Upstream's material is good; this product has no opinion about methodology. That belongs to [PRODUCT-2](PRODUCT-2-WORKFLOW-MODES.md).
 - **Fighting prompts with prompts.** Suppression is by configuration, never persuasion.
@@ -226,7 +228,7 @@ Every mechanism claim now rests on Anthropic's documentation, cross-verified by 
 
 ## Open questions
 
-1. **v1 boundary.** Local-only resolution delivers #645 with zero network code; marketplace-resolved cloning is what delivers *"run a framework you never installed."* Current lean: **include the fetch path** — the marketplace manifest does the hard part.
+1. ~~**v1 boundary.**~~ **Resolved:** the fetch path shipped. Marketplace-resolved cloning is what delivers *"run a framework you never installed"*, and the marketplace manifest does the hard part. It is now the `--own` source.
 2. **Implementation language and distribution.** `exciton` on npm is the low-friction path (the audience provably has node; `npx exciton superpowers` works with zero install). Alternative: a single Go/Rust binary via the free Homebrew formula.
 3. **`command`-source plugins** ❓ — cannot be fetched by clone. Detect and fail loudly; confirm how common they are.
 4. **Banner output.** One stderr line per launch, or silent by default?

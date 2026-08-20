@@ -107,19 +107,28 @@ test('finishing points at a command that will actually work', () => {
   assert.match(h.text(), /exciton superpowers --no-hooks/);
 });
 
-/**
- * `add` and onboarding confirm an addition with the same text, from one
- * function — they had already drifted apart once when each wrote its own.
- */
-test('onboarding confirms which copy was chosen, exactly as add does', () => {
+test('the closing names what was added', () => {
   const h = harness([installed('superpowers')]);
   onboard({ ...h.deps, chooseSource: () => 'installed' });
   assert.match(h.text(), /Added superpowers/);
-  assert.match(h.text(), /copy Claude already has installed/);
 });
 
-test('choosing an exciton copy is confirmed as such', () => {
+/**
+ * The answered step still shows which copy was chosen, so repeating it in the
+ * closing was pure restatement — the thing that made this read as generated
+ * rather than considered.
+ */
+test('the closing does not restate the choice just made', () => {
+  const h = harness([installed('superpowers')]);
+  onboard({ ...h.deps, chooseSource: () => 'installed' });
+  assert.doesNotMatch(h.text(), /copy Claude already has installed/);
+  assert.doesNotMatch(h.text(), /independent of Claude/);
+});
+
+/** The flow has an unmistakable start and end. */
+test('the walkthrough opens and closes the rail', () => {
   const h = harness();
-  onboard(h.deps);
-  assert.match(h.text(), /exciton's own copy/);
+  onboard({ ...h.deps, pick: () => [] });
+  assert.match(h.text(), /┌/);
+  assert.match(h.text(), /└/);
 });

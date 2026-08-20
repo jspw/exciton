@@ -45,6 +45,8 @@ export interface ResolveOptions {
    * quietly hand back Claude's copy instead.
    */
   ownCopy?: boolean;
+  /** Progress reporting, forwarded to the clone. */
+  say?: (text: string) => void;
 }
 
 export function resolvePlugin(
@@ -53,7 +55,7 @@ export function resolvePlugin(
   const d: ResolveDeps = {
     findInstalled: deps.findInstalled ?? (n => realFindInstalled(n)),
     findInMarketplaces: deps.findInMarketplaces ?? (n => realFindInMarketplaces(n)),
-    cloneSource: deps.cloneSource ?? ((n, s) => realCloneSource(n, s)),
+    cloneSource: deps.cloneSource ?? ((n, s) => realCloneSource(n, s, opts.say ? { say: opts.say } : {})),
   };
 
   if (isPathSpec(spec)) {

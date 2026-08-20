@@ -12,7 +12,7 @@ import { addCommand, removeCommand, updateCommand } from './commands/manage.ts';
 import { readRegistry, addedNames, isOnboarded, type Source } from './registry.ts';
 import { onboard } from './onboarding.ts';
 import { isInteractive } from './prompt.ts';
-import { UserError, failure, bold, cyan, dim, ARROW } from './ui.ts';
+import { UserError, failure, styler, bold, cyan, dim, ARROW } from './ui.ts';
 
 /** Lives in frameworks.ts so `fetch` can refuse identically without a cycle. */
 export { assertManaged };
@@ -30,41 +30,48 @@ export interface ParsedArgs {
 const SUBCOMMANDS = new Set(['list', 'clean', 'add', 'remove', 'update', 'help', 'version']);
 
 export function helpText(): string {
-  return `exciton — run Claude Code with an agentic framework dialled to the level you want.
+  const { bold: b, dim: d, cyan: c } = styler(process.stdout);
+  const heading = (t: string) => b(t);
+  // Two columns: the thing you type, then what it does. Padding the term before
+  // styling keeps the description column aligned once colour is on.
+  const row = (term: string, desc: string) => `  ${b(term.padEnd(15))}${d(desc)}`;
+  const example = (cmd: string, desc: string) => `  ${b(cmd.padEnd(38))}${d(desc)}`;
 
-USAGE
-  exciton <framework> [--no-hooks] [-- claude-args...]
-  exciton <command>
+  return `${c(b('exciton'))} ${d('— run Claude Code with an agentic framework dialled to the level you want.')}
 
-FRAMEWORKS
-  ${[...FRAMEWORKS].join(', ')}
-  Frameworks are mutually exclusive — name exactly one. Running it silences
-  any other framework for the session. Ordinary plugins are never touched.
+${heading('USAGE')}
+  ${b('exciton <framework>')} ${d('[--no-hooks] [-- claude-args...]')}
+  ${b('exciton <command>')}
 
-PROFILES
-  (default)      the framework exactly as published, hooks and all
-  --no-hooks     skills stay callable, nothing auto-fires
+${heading('FRAMEWORKS')}
+  ${b([...FRAMEWORKS].join(', '))}
+${d('  Frameworks are mutually exclusive — name exactly one. Running it silences')}
+${d('  any other framework for the session. Ordinary plugins are never touched.')}
+${d('  A framework must be added before it will run.')}
 
-COMMANDS
-  add [name]     add a framework to exciton, choosing which copy it runs from
-                 (--use-installed / --own skip the question)
-  remove <name>  take a framework back out
-  update [name]  refresh exciton's own copies to the newest release
-  list           what is added, and which plugins auto-fire
-  clean          empty exciton's cache; refused while a session is running
-                 from it, and --force overrides that
-  help           this text
-  version        print the version
+${heading('PROFILES')}
+${row('(default)', 'the framework exactly as published, hooks and all')}
+${row('--no-hooks', 'skills stay callable, nothing auto-fires')}
 
-EXAMPLES
-  exciton superpowers --no-hooks            skills on the shelf, no ceremony
-  exciton superpowers                       the full framework, as upstream ships it
-  exciton superpowers --no-hooks -- -c      ...and continue your last session
-  exciton ./my-superpowers-fork             a local checkout, judged by its manifest
+${heading('COMMANDS')}
+${row('add [name]', 'add a framework, choosing which copy it runs from')}
+${row('', '  (--use-installed / --own skip the question)')}
+${row('remove <name>', 'take a framework back out')}
+${row('update [name]', "refresh exciton's own copies to the newest release")}
+${row('list', 'what is added, and which plugins auto-fire')}
+${row('clean', "empty exciton's cache; refused while a session is using it")}
+${row('help', 'this text')}
+${row('version', 'print the version')}
 
-exciton manages agentic workflow frameworks and nothing else. Your ordinary
-plugins — design helpers, language servers, and the rest — keep working exactly
-as your own settings have them, and nothing under ~/.claude is ever written.
+${heading('EXAMPLES')}
+${example('exciton superpowers --no-hooks', 'skills on the shelf, no ceremony')}
+${example('exciton superpowers', 'the full framework, as upstream ships it')}
+${example('exciton superpowers --no-hooks -- -c', '...and continue your last session')}
+${example('exciton ./my-superpowers-fork', 'a local checkout, by its manifest name')}
+
+${d('exciton manages agentic workflow frameworks and nothing else. Your ordinary')}
+${d('plugins — design helpers, language servers, and the rest — keep working exactly')}
+${d('as your own settings have them, and nothing under ~/.claude is ever written.')}
 `;
 }
 

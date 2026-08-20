@@ -13,6 +13,19 @@ export function colorEnabled(): boolean {
 const style = (open: string) => (s: string) =>
   colorEnabled() ? `\x1b[${open}m${s}\x1b[0m` : s;
 
+/**
+ * Styling bound to a specific stream.
+ *
+ * Messages go to stderr, but help goes to stdout — and `exciton help > file`
+ * must not land escape codes in the file just because stderr happens to be a
+ * terminal. Each stream answers for itself.
+ */
+export function styler(stream: { isTTY?: boolean }) {
+  const on = Boolean(stream.isTTY) && !process.env.NO_COLOR;
+  const wrapIn = (open: string) => (s: string) => on ? `\x1b[${open}m${s}\x1b[0m` : s;
+  return { bold: wrapIn('1'), dim: wrapIn('2'), cyan: wrapIn('36') };
+}
+
 export const bold = style('1');
 export const dim = style('2');
 export const cyan = style('36');
@@ -24,6 +37,28 @@ export const CHECK = '✓';
 export const DOT = '·';
 export const ARROW = '›';
 export const CROSS = '✗';
+
+/**
+ * Glyphs for the connected rail.
+ *
+ * Onboarding is one flow, not five stacked messages. A gutter running down the
+ * left says so, and gives the walkthrough an unmistakable start and end.
+ */
+export const RAIL = '│';
+export const RAIL_OPEN = '┌';
+export const RAIL_CLOSE = '└';
+export const STEP_ACTIVE = '◆';
+export const STEP_DONE = '◇';
+
+/** `│  text`, or a bare `│` for a spacer. */
+export function rail(text = ''): string {
+  return text === '' ? dim(RAIL) : `${dim(RAIL)}  ${text}`;
+}
+
+/** A step's heading: the glyph, then the question. */
+export function step(glyph: string, text: string): string {
+  return `${cyan(glyph)}  ${bold(text)}`;
+}
 
 /** Width on screen: SGR escapes occupy string length but no columns. */
 export function visibleLength(s: string): number {

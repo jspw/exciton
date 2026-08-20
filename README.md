@@ -68,7 +68,7 @@ exciton manages **agentic workflow frameworks** — the things that define *how 
 | To each other | **mutually exclusive** — two of them fight over the same job | **compose freely** |
 | exciton's stance | dials the one you name, silences the rest | never touches them |
 
-Consequences: naming two frameworks is refused, naming an ordinary plugin is refused, and a bare `exciton` with no framework is a usage error — it would launch a session identical to plain `claude`.
+Consequences: naming two frameworks is refused, naming an ordinary plugin is refused, and a bare `exciton` with no framework is a usage error once you are set up — it would launch a session identical to plain `claude`. (On a fresh machine, bare `exciton` is the walkthrough instead.)
 
 ## How it works
 
@@ -103,10 +103,12 @@ plugin ids.
 
 ## Status
 
-Early. The mechanism is documented by Anthropic and cross-verified by an integration suite that asserts against Claude Code's own debug output; the CLI around it is young. Expect rough edges, and please open an issue rather than working around them silently.
+1.0.0. The mechanism is documented by Anthropic and cross-verified by an integration suite that asserts against Claude Code's own debug output — including that no Claude state file is modified. The command surface is settled; widening it is a semver commitment.
+
+Currently ships one framework, `superpowers`. Adding another is deliberate: it needs a staging profile known to work for that framework's hook layout, not just a new string in a set.
 
 ```sh
-npm test              # unit tests
+npm test                   # unit tests
 npm run test:integration   # asserts real Claude Code behaviour; needs claude installed
 ```
 
@@ -118,7 +120,7 @@ npm run test:integration   # asserts real Claude Code behaviour; needs claude in
 | [MECHANISM.md](MECHANISM.md) | how it works, and the evidence for every claim |
 | [QA.md](QA.md) | questions, answers, and the reasoning behind each decision |
 | [PROBLEM.md](PROBLEM.md) | the validated problem this addresses |
-| [PLAN.md](PLAN.md) | the implementation plan |
+| [PLAN.md](PLAN.md) | the v1 implementation plan — historical, superseded by 1.0.0 |
 
 ## License
 

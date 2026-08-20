@@ -294,3 +294,33 @@ test('the launch line is one line, indented like every other message', () => {
   assert.doesNotMatch(line, /\n/);
   assert.match(line, /^ {2}\S/);
 });
+
+/** Help states the setup step; without it the gate looks like a malfunction. */
+test('help says a framework must be added before it runs', () => {
+  assert.match(helpText(), /must be added before it will run/i);
+});
+
+test('help lists every command the CLI actually accepts', () => {
+  const text = helpText();
+  for (const cmd of ['add', 'remove', 'update', 'list', 'clean', 'help', 'version']) {
+    assert.match(text, new RegExp(`\\n\\s+${cmd}\\b`), `${cmd} missing from help`);
+  }
+});
+
+test('help no longer advertises the removed fetch command', () => {
+  assert.doesNotMatch(helpText(), /\bfetch\b/);
+});
+
+/**
+ * Help goes to stdout, messages to stderr. `exciton help > file` must not land
+ * escape codes in the file just because stderr happens to be a terminal.
+ */
+test('help colour follows stdout, not stderr', () => {
+  const original = process.stdout.isTTY;
+  try {
+    Object.defineProperty(process.stdout, 'isTTY', { value: false, configurable: true });
+    assert.doesNotMatch(helpText(), /\x1b\[/);
+  } finally {
+    Object.defineProperty(process.stdout, 'isTTY', { value: original, configurable: true });
+  }
+});
