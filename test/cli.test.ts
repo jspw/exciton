@@ -6,9 +6,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  parseArgs, isMainModule, assertManaged, assertSingleFramework, run, helpText, versionText,
+  parseArgs, isMainModule, assertManaged, assertSingleFramework, assertNotEnterpriseLocked,
+  assertAdded, runLine, run, helpText, versionText,
 } from '../src/cli.ts';
 import type { Resolved } from '../src/resolve.ts';
+import { UserError } from '../src/ui.ts';
+/** What the user actually sees: a UserError's headline plus its detail lines. */
+function shown(fn: () => unknown): string {
+  try { fn(); } catch (e) {
+    return e instanceof UserError ? e.render() : String((e as Error).message);
+  }
+  throw new Error('expected a throw, got none');
+}
+
 
 function resolved(name: string): Resolved {
   return { name, dir: `/x/${name}`, version: '1.0.0', sha: '', origin: 'installed' };
@@ -83,7 +93,9 @@ test('everything after -- is forwarded verbatim', () => {
 test('subcommands are recognised only in first position', () => {
   assert.equal(parseArgs(['list']).command, 'list');
   assert.equal(parseArgs(['clean']).command, 'clean');
-  assert.equal(parseArgs(['fetch', 'superpowers']).command, 'fetch');
+  assert.equal(parseArgs(['add', 'superpowers']).command, 'add');
+  assert.equal(parseArgs(['remove', 'superpowers']).command, 'remove');
+  assert.equal(parseArgs(['update']).command, 'update');
   assert.equal(parseArgs(['superpowers', 'list']).command, 'run');
   assert.deepEqual(parseArgs(['superpowers', 'list']).names, ['superpowers', 'list']);
 });
@@ -123,14 +135,16 @@ test('naming one framework is fine', () => {
   assert.doesNotThrow(() => assertSingleFramework([resolved('superpowers')]));
 });
 
-test('naming nothing is accepted — bare exciton is a pass-through', () => {
+/** The refusal is `run`'s job (see above); assertManaged has nothing to judge. */
+test('assertManaged has no opinion on an empty selection', () => {
   assert.doesNotThrow(() => assertManaged([]));
 });
 
 /** exciton dials agentic frameworks. Ordinary plugins are none of its business. */
 test('an unmanaged plugin is refused, naming it and what exciton does manage', () => {
-  assert.throws(() => assertManaged([resolved('warp')]), /warp/);
-  assert.throws(() => assertManaged([resolved('warp')]), /superpowers/);
+  const text = shown(() => assertManaged([resolved('warp')]));
+  assert.match(text, /warp/);
+  assert.match(text, /superpowers/);
 });
 
 /**
@@ -152,7 +166,7 @@ test('refusing an unmanaged plugin exits non-zero', () => {
   const cli = new URL('../src/cli.ts', import.meta.url).pathname;
   const proc = spawnSync(process.execPath, [cli, dir], { encoding: 'utf8' });
   assert.equal(proc.status, 1);
-  assert.match(proc.stderr, /does not manage warp/);
+  assert.match(proc.stderr, /doesn't manage warp/);
 });
 
 test('the refusal lists every unmanaged name at once', () => {
@@ -160,6 +174,34 @@ test('the refusal lists every unmanaged name at once', () => {
     () => assertManaged([resolved('superpowers'), resolved('warp'), resolved('swift-lsp')]),
     /warp.*swift-lsp|swift-lsp.*warp/s,
   );
+});
+
+/**
+ * Managed settings outrank --settings, so a force-enabled framework survives
+ * the suppression payload while --plugin-dir still adds the staged copy. That
+ * session is the exact mixture exciton exists to prevent, so launching it —
+ * even after a warning — is worse than not running at all. Refuse instead.
+ */
+test('a framework pinned by enterprise settings is refused, not warned about', () => {
+  assert.throws(
+    () => assertNotEnterpriseLocked(['superpowers@official'], ['superpowers@official']),
+    /superpowers@official/,
+  );
+});
+
+test('the enterprise refusal explains why the session cannot be delivered', () => {
+  assert.match(
+    shown(() => assertNotEnterpriseLocked(['superpowers@official'], ['superpowers@official'])),
+    /enterprise-managed/,
+  );
+});
+
+test('an enterprise-managed plugin exciton is not suppressing is no obstacle', () => {
+  assert.doesNotThrow(() => assertNotEnterpriseLocked(['superpowers@official'], ['warp@official']));
+});
+
+test('nothing enterprise-managed at all is the ordinary case', () => {
+  assert.doesNotThrow(() => assertNotEnterpriseLocked(['superpowers@official'], []));
 });
 
 /**
@@ -206,4 +248,49 @@ test('the built bin carries a shebang so POSIX can exec it', async () => {
   const built = new URL('../dist/cli.js', import.meta.url).pathname;
   if (!existsSync(built)) return; // dist/ is a build artifact; skip before `npm run build`
   assert.match(readFileSync(built, 'utf8').split('\n')[0], /^#!\/usr\/bin\/env node$/);
+});
+
+/**
+ * The gate the whole registry exists to serve: a framework you have not added
+ * does not silently run. The refusal has to name the command that fixes it.
+ */
+test('running a framework that is not added is refused with the fix', () => {
+  assert.match(shown(() => assertAdded('superpowers', [])), /exciton add superpowers/);
+});
+
+test('running a framework that is added is allowed', () => {
+  assert.doesNotThrow(() => assertAdded('superpowers', ['superpowers']));
+});
+
+test('the refusal explains that this is not a global install', () => {
+  const text = shown(() => assertAdded('superpowers', []));
+  assert.match(text, /global install/i);
+  assert.match(text, /session/i);
+});
+
+test('the source flags select which copy add uses', () => {
+  assert.equal(parseArgs(['add', 'superpowers', '--use-installed']).source, 'installed');
+  assert.equal(parseArgs(['add', 'superpowers', '--own']).source, 'own');
+  assert.equal(parseArgs(['add', 'superpowers']).source, undefined);
+});
+
+/**
+ * The only confirmation that the launched session is the one that was asked
+ * for. Silence on the default profile made a full session and a broken one
+ * look identical, so both directions are stated.
+ */
+test('the launch line names the framework and the profile it got', () => {
+  assert.match(runLine('superpowers', 'nohooks'), /superpowers/);
+  assert.match(runLine('superpowers', 'nohooks'), /no-hooks/);
+  assert.match(runLine('superpowers', 'full'), /hooks active/);
+});
+
+test('the launch line says what no-hooks actually does', () => {
+  assert.match(runLine('superpowers', 'nohooks'), /nothing auto-fires/);
+});
+
+test('the launch line is one line, indented like every other message', () => {
+  const line = runLine('superpowers', 'full');
+  assert.doesNotMatch(line, /\n/);
+  assert.match(line, /^ {2}\S/);
 });

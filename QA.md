@@ -60,9 +60,15 @@ Enforcement, by configuration. Nothing is argued with the model. A plugin that w
 
 No — **nothing on disk is per-session**. A staged tree is a pure function of `(plugin, version, sha, profile)`, so it's cache, not run state; two sessions with the same exciton share one directory. There's no run directory to orphan. `exciton clean` prunes the cache when you want the space back.
 
-### Why `exec` instead of supervising the child process?
+**One thing under `~/.exciton` is not cache:** `config.json`, the registry of frameworks you have added. It sits outside `staged/` and `src/` precisely so `clean` cannot take it — emptying the cache costs you disk, never your setup.
 
-Nothing needs cleaning up. `exec` means exciton replaces itself: no resident process, no signal forwarding, no TTY passthrough, no PID tracking.
+Shared cache does mean a live session is reading skills out of a directory `clean` would delete, so **`clean` refuses while any session is running from the cache** and exits 1; `--force` overrides. Claude Code's `.in_use/<pid>` markers are no help here — verified 2026-08-20, they are written only inside `~/.claude/plugins/cache/`, never into a `--plugin-dir` tree — so the signal is the process table: a session exciton launched carries `--plugin-dir <exciton dir>` in its own argv.
+
+### Why not supervise the child process?
+
+Nothing needs cleaning up, so exciton does the least it can: `spawnSync` with inherited stdio, forwarding the child's exit code. Ctrl-C reaches `claude` directly through the foreground process group, and no state is per-session.
+
+> **Superseded wording.** This previously described a real `exec` with "no resident process". Node has no `execve` — exciton leaves a parent that only waits, as [MECHANISM.md](MECHANISM.md) has always said. The distinction matters in one place: `clean` skips its own pid and its parent's when scanning the process table for live sessions.
 
 ---
 
@@ -100,7 +106,7 @@ So `--no-hooks` means: skills callable by name, nothing else. Precisely what [is
 ### Someone has never installed superpowers. What happens?
 
 1. `installed_plugins.json` — miss.
-2. **Marketplace manifest.** It already maps name → git URL → pinned sha ✅ (superpowers → `https://github.com/obra/superpowers.git` at a pinned commit). exciton clones that into `~/.exciton/src/superpowers/<sha>/`.
+2. **Marketplace manifest.** It already maps name → git URL ✅ (superpowers → `https://github.com/obra/superpowers.git`). exciton resolves that repo's newest release tag and clones it into `~/.exciton/src/superpowers/<version>/`. Any sha the manifest pins is ignored — exciton tracks releases, not commits.
 3. Explicit `exciton https://github.com/obra/superpowers` or `exciton ./dir`.
 
 Then stage and exec. **Claude never learns superpowers exists.**
@@ -119,11 +125,17 @@ Mostly no. **Claude's marketplace manifests are the registry**, covering 287 plu
 
 ### Will there be an install command?
 
-**No, deliberately.** The verb set is `exciton`, `exciton list`, `exciton fetch` (optional cache prewarm), `exciton clean`. Installation is Claude's concept; exciton's concept is *use*.
+**No — and `exciton add` is not one.** The verb set is `exciton`, `exciton add`, `exciton remove`, `exciton update`, `exciton list`, `exciton clean`.
+
+The distinction is the whole point. `claude plugin install` writes to `~/.claude` and enables a plugin in **every** session, including the VS Code extension — that is the disease. `exciton add` records a choice in `~/.exciton/config.json` and changes nothing about how `claude` behaves. The onboarding says so in as many words, because someone asked to run a setup step deserves to know it costs them nothing globally.
+
+> **Superseded wording.** This previously read *"Installation is Claude's concept; exciton's concept is use."* Still true of `claude plugin install`; but exciton now has a setup step of its own, and pretending otherwise would misdescribe the tool.
 
 ### Does `exciton superpowers` change which version I have installed?
 
-No. Local resolution is first, so it uses the version already on disk — offline, instant, no surprise upgrade. `exciton superpowers@6.2.0` fetches that ref into exciton's own cache, still without touching Claude's.
+No. Local resolution is first, so it uses the version already on disk — offline, instant, no surprise upgrade.
+
+**exciton does not offer a choice of versions.** A framework is either the copy Claude already has, or exciton's own copy at the newest release — there is no version selector, deliberately. Choosing between releases of the same framework is a question almost nobody needs answered, and carrying it costs a syntax (`@ref`) that collides with Claude's own `name@marketplace` plugin ids. Dropping it removed the collision rather than fixing it: `superpowers@claude-plugins-official` now resolves the way anyone would expect, because `@` has only one meaning left.
 
 ---
 
@@ -181,7 +193,9 @@ That is exactly *because* it would otherwise be indistinguishable from `claude`.
 
 ### Does this work on an enterprise-managed machine?
 
-Not fully 📄: `--plugin-dir` cannot override plugins that managed settings force-enable or force-disable, and managed settings outrank command-line arguments. exciton should detect this and say so rather than appear to work.
+Not fully 📄: `--plugin-dir` cannot override plugins that managed settings force-enable or force-disable, and managed settings outrank command-line arguments.
+
+**exciton detects this and refuses, exiting 1.** If a managed framework you are suppressing is pinned by managed settings, the session you asked for cannot be built: the pinned framework survives the `enabledPlugins` payload while `--plugin-dir` adds your chosen copy alongside it, giving you both at once. Launching that after printing a warning would hand you the precise mixture exciton exists to prevent, dressed as success — so it does not launch.
 
 ---
 

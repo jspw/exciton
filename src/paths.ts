@@ -27,8 +27,16 @@ export function marketplacesDir(): string {
   return join(CLAUDE_DIR, 'plugins', 'marketplaces');
 }
 
-export function srcDir(name: string, sha: string): string {
-  return join(EXCITON_DIR, 'src', name, sha);
+/**
+ * The registry of added frameworks. Deliberately outside `staged/` and `src/`,
+ * the two directories `clean` empties — your setup is not disposable cache.
+ */
+export function configPath(): string {
+  return join(EXCITON_DIR, 'config.json');
+}
+
+export function srcDir(name: string, key: string): string {
+  return join(EXCITON_DIR, 'src', name, key);
 }
 
 export function stagedDir(key: string): string {

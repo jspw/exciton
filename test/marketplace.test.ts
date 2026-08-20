@@ -13,20 +13,21 @@ function marketplaceRoot(plugins: unknown[]): string {
   return root;
 }
 
-test('url source yields a git source with its pinned sha', () => {
+/** A manifest's pinned sha is ignored: exciton always takes the newest release. */
+test('url source yields a git source, dropping any pinned sha', () => {
   const root = marketplaceRoot([{
     name: 'superpowers',
     source: { source: 'url', url: 'https://github.com/obra/superpowers.git', sha: 'b36e082' },
   }]);
   assert.deepEqual(findInMarketplaces('superpowers', root), {
-    kind: 'git', url: 'https://github.com/obra/superpowers.git', sha: 'b36e082',
+    kind: 'git', url: 'https://github.com/obra/superpowers.git',
   });
 });
 
 test('github source is expanded to an https clone url', () => {
   const root = marketplaceRoot([{ name: 'x', source: { source: 'github', repo: 'owner/repo' } }]);
   assert.deepEqual(findInMarketplaces('x', root), {
-    kind: 'git', url: 'https://github.com/owner/repo.git', sha: '',
+    kind: 'git', url: 'https://github.com/owner/repo.git',
   });
 });
 

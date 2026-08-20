@@ -71,19 +71,25 @@ All three share one property that shaped the design: **they already have at leas
 exciton superpowers                # exactly upstream superpowers, this session only
 exciton superpowers --no-hooks     # skills callable by name; nothing auto-fires
 exciton ./path/to/plugin           # a local checkout, judged by its manifest name
-exciton superpowers@6.2.0          # a pinned ref
+exciton superpowers@claude-plugins-official  # the full plugin id also works
 exciton superpowers -- --model opus  # everything after `--` goes to claude
 
-exciton list                       # what's available, where it resolves, what auto-fires
-exciton fetch [name]               # optional cache prewarm
-exciton clean                      # prune staged trees
+exciton add [name]                 # add a framework; --use-installed / --own skip the question
+exciton remove <name>              # take one back out
+exciton update [name]              # refresh exciton's own copies to the newest release
+exciton list                       # what's added, what's available, what auto-fires
+exciton clean                      # prune staged trees; --force overrides the live-session guard
 exciton help                       # usage; also -h / --help
 exciton version                    # also -v / --version
 ```
 
 Session ends → nothing persists. The next `claude` is exactly as it was ✅.
 
-**A framework name is required.** Bare `exciton` is a usage error that prints help and exits 1. With nothing named, exciton would suppress nothing and launch a session byte-identical to plain `claude` — a reason to type `claude`, not `exciton`. (An earlier draft made bare `exciton` mean "zero plugins"; that followed from the superseded allow-list design.)
+**A framework must be added before it runs.** `exciton superpowers` on a machine where it has not been added exits 1 and names the command that fixes it, saying plainly that adding is not a global install. The registry lives in `~/.exciton/config.json`; `onboardedAt` in that file is what distinguishes "never onboarded" from "onboarded and deliberately added nothing", so opting out sticks.
+
+**First contact runs a walkthrough.** On the first invocation with no config — and only with a terminal attached — exciton explains the problem it solves, shows which frameworks are already installed through Claude, and lets the user add zero, one, or several. npm `postinstall` is the wrong hook for this: npm runs lifecycle scripts non-interactively and often under `--ignore-scripts`, so prompting there either hangs or is suppressed.
+
+**A framework name is required — once you are set up.** After onboarding, bare `exciton` is a usage error that prints help and exits 1: with nothing named it would suppress nothing and launch a session byte-identical to plain `claude`, which is a reason to type `claude`. Before onboarding, bare `exciton` is the walkthrough — the one case where naming nothing has something to say. (An earlier draft made bare `exciton` mean "zero plugins"; that followed from the superseded allow-list design.)
 
 **Naming a plugin exciton does not manage is refused.** `exciton warp` exits 1 and explains that warp already works exactly as your settings have it, so there is nothing to name.
 
@@ -92,16 +98,27 @@ Session ends → nothing persists. The next `claude` is exactly as it was ✅.
 There is no built-in way to see which installed plugins inject into every session:
 
 ```
-NAME                 VERSION    ENABLED  AUTO-FIRES
-frontend-design      unknown    yes      —
-superpowers          6.3.0      yes      SessionStart
-swift-lsp            1.0.0      yes      —
-ui-ux-pro-max        2.6.2      yes      —
-understand-anything  2.6.0      yes      SessionStart
-warp                 2.1.0      yes      SessionStart
+FRAMEWORKS — exciton runs one of these per session
+  NAME         ADDED                 VERSION    AUTO-FIRES
+  superpowers  yes (Claude's copy)   6.3.0      SessionStart
+
+  Run: exciton superpowers [--no-hooks]
+
+OTHER PLUGINS — untouched; your own settings govern these
+  NAME                 VERSION    ENABLED  AUTO-FIRES
+  frontend-design      unknown    yes      —
+  swift-lsp            1.0.0      yes      —
+  ui-ux-pro-max        2.6.2      yes      —
+  understand-anything  2.6.0      yes      SessionStart
+  warp                 2.1.0      yes      SessionStart
 ```
 
-`exciton list` reports **every** installed plugin, not just managed frameworks — its job is to show you what auto-fires, including the plugins exciton will never touch. The `AUTO-FIRES` column reflects whether the plugin ships a `hooks/hooks.json` at all; naming the specific events is a later refinement.
+`exciton list` answers two questions at once, which is why it reports **every** installed plugin rather than only managed frameworks:
+
+- **What injects into my session?** The `AUTO-FIRES` column, across both sections — including the plugins exciton will never touch. It reflects whether the plugin ships a `hooks/hooks.json` at all; naming the specific events is a later refinement.
+- **What can I type?** The `FRAMEWORKS` section. Without it the output is informative but not actionable: `resolve.ts` tells a user who mistyped a name to "check the name with `exciton list`", and that is only honest if the output names what exciton actually accepts.
+
+The split is the [scope distinction](#the-distinction-the-product-rests-on) made visible. A framework exciton supports but you have never installed still appears, marked `—`, because `exciton <name>` fetches it on demand — so the section is the runnable set, not the installed subset of it.
 
 ---
 
@@ -155,7 +172,7 @@ The allow-list is real, but its universe is the framework set — not your plugi
 
 **Out of scope — Windows.** POSIX (macOS + Linux) for v1, by decision.
 
-**Out of scope — enterprise-managed setups.** `--plugin-dir` cannot override plugins that managed settings force-enable or force-disable 📄. exciton should detect this and say so plainly.
+**Out of scope — enterprise-managed setups.** `--plugin-dir` cannot override plugins that managed settings force-enable or force-disable 📄. exciton detects this and **refuses, exiting 1**. Warning and launching anyway was rejected: managed settings outrank the suppression payload, so the framework stays enabled *and* the staged copy is added beside it — the exact mixture the tool exists to prevent, arriving under the appearance of success. A session that cannot be delivered is not delivered.
 
 ---
 

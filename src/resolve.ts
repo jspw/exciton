@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve as resolvePath, join } from 'node:path';
 import { findInstalled as realFindInstalled, type InstalledPlugin } from './installed.ts';
 import { findInMarketplaces as realFindInMarketplaces, type PluginSource } from './marketplace.ts';
-import { cloneSource as realCloneSource } from './fetch.ts';
+import { cloneSource as realCloneSource, type Cloned } from './fetch.ts';
+import { UserError } from './ui.ts';
 
 export interface Resolved {
   name: string;
@@ -15,10 +16,11 @@ export interface Resolved {
 export interface ResolveDeps {
   findInstalled: (name: string) => InstalledPlugin | undefined;
   findInMarketplaces: (name: string) => PluginSource | undefined;
-  cloneSource: (name: string, src: PluginSource) => string;
+  cloneSource: (name: string, src: PluginSource) => Cloned;
 }
 
-function isPathSpec(spec: string): boolean {
+/** Exported so callers can tell a name they can judge from a path they cannot. */
+export function isPathSpec(spec: string): boolean {
   return spec.startsWith('/') || spec.startsWith('.') || spec.startsWith('~');
 }
 
@@ -34,7 +36,20 @@ function fromDirectory(dir: string): Resolved {
   return { name, dir: abs, version, sha: '', origin: 'path' };
 }
 
-export function resolvePlugin(spec: string, deps: Partial<ResolveDeps> = {}): Resolved {
+export interface ResolveOptions {
+  /**
+   * Skip the installed copy and resolve exciton's own clone.
+   *
+   * This is what makes `--own` mean anything: without it, a framework Claude
+   * has installed would always win the lookup, and "keep an exciton copy" would
+   * quietly hand back Claude's copy instead.
+   */
+  ownCopy?: boolean;
+}
+
+export function resolvePlugin(
+  spec: string, deps: Partial<ResolveDeps> = {}, opts: ResolveOptions = {},
+): Resolved {
   const d: ResolveDeps = {
     findInstalled: deps.findInstalled ?? (n => realFindInstalled(n)),
     findInMarketplaces: deps.findInMarketplaces ?? (n => realFindInMarketplaces(n)),
@@ -42,13 +57,16 @@ export function resolvePlugin(spec: string, deps: Partial<ResolveDeps> = {}): Re
   };
 
   if (isPathSpec(spec)) {
-    if (!existsSync(resolvePath(spec))) throw new Error(`no such plugin directory: ${spec}`);
+    if (!existsSync(resolvePath(spec))) throw new UserError(`No such directory: ${spec}`);
     return fromDirectory(spec);
   }
 
-  const [name, ref] = spec.split('@');
+  // Claude Code identifies a plugin as `name@marketplace`, and that is the
+  // string people copy out of settings.json. exciton has no other meaning for
+  // `@` — it does not select versions — so the marketplace half is ignored.
+  const name = spec.split('@')[0];
 
-  if (!ref) {
+  if (!opts.ownCopy) {
     const hit = d.findInstalled(name);
     if (hit) {
       return { name: hit.name, dir: hit.installPath, version: hit.version, sha: hit.sha, origin: 'installed' };
@@ -57,18 +75,12 @@ export function resolvePlugin(spec: string, deps: Partial<ResolveDeps> = {}): Re
 
   const source = d.findInMarketplaces(name);
   if (!source) {
-    throw new Error(
-      `cannot resolve "${name}": not installed and not found in any marketplace. ` +
-      `Try a path, or check the name with \`exciton list\`.`,
-    );
+    throw new UserError(`Can't find ${name}`, [
+      "It isn't installed through Claude, and no marketplace you have lists it.",
+      'Run `exciton list` to see what exciton can run, or name a directory to use a ' +
+      'local checkout.',
+    ]);
   }
-  const pinned: PluginSource = source.kind === 'git' && ref ? { ...source, sha: ref } : source;
-  const dir = d.cloneSource(name, pinned);
-  return {
-    name,
-    dir,
-    version: ref ?? '0.0.0',
-    sha: pinned.kind === 'git' ? pinned.sha : '',
-    origin: 'fetched',
-  };
+  const { dir, version } = d.cloneSource(name, source);
+  return { name, dir, version, sha: '', origin: 'fetched' };
 }

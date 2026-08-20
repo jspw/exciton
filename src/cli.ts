@@ -3,20 +3,31 @@ import { realpathSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { collectPluginIds, buildDisablePayload } from './settings.ts';
 import { resolvePlugin, type Resolved } from './resolve.ts';
-import { isFramework, FRAMEWORKS, frameworkIdsIn } from './frameworks.ts';
+import { isFramework, FRAMEWORKS, frameworkIdsIn, assertManaged } from './frameworks.ts';
 import { stagePlugin, type Profile } from './stage.ts';
 import { launch } from './launch.ts';
 import { listPlugins } from './commands/list.ts';
-import { cleanCache, prefetch } from './commands/cache.ts';
+import { cleanCache } from './commands/cache.ts';
+import { addCommand, removeCommand, updateCommand } from './commands/manage.ts';
+import { readRegistry, addedNames, isOnboarded, type Source } from './registry.ts';
+import { onboard } from './onboarding.ts';
+import { isInteractive } from './prompt.ts';
+import { UserError, failure, bold, cyan, dim, ARROW } from './ui.ts';
+
+/** Lives in frameworks.ts so `fetch` can refuse identically without a cycle. */
+export { assertManaged };
 
 export interface ParsedArgs {
-  command: 'run' | 'list' | 'clean' | 'fetch' | 'help' | 'version';
+  command: 'run' | 'list' | 'clean' | 'add' | 'remove' | 'update' | 'help' | 'version';
   names: string[];
   profile: Profile;
+  force: boolean;
+  /** Set by --use-installed / --own; skips the source question in `add`. */
+  source?: Source;
   forward: string[];
 }
 
-const SUBCOMMANDS = new Set(['list', 'clean', 'fetch', 'help', 'version']);
+const SUBCOMMANDS = new Set(['list', 'clean', 'add', 'remove', 'update', 'help', 'version']);
 
 export function helpText(): string {
   return `exciton — run Claude Code with an agentic framework dialled to the level you want.
@@ -35,9 +46,13 @@ PROFILES
   --no-hooks     skills stay callable, nothing auto-fires
 
 COMMANDS
-  list           installed plugins, and which ones auto-fire
-  fetch <name>   warm the cache so a later run is instant and works offline
-  clean          empty exciton's cache
+  add [name]     add a framework to exciton, choosing which copy it runs from
+                 (--use-installed / --own skip the question)
+  remove <name>  take a framework back out
+  update [name]  refresh exciton's own copies to the newest release
+  list           what is added, and which plugins auto-fire
+  clean          empty exciton's cache; refused while a session is running
+                 from it, and --force overrides that
   help           this text
   version        print the version
 
@@ -76,33 +91,20 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   const names: string[] = [];
   let profile: Profile = 'full';
+  let force = false;
+  let source: Source | undefined;
   for (const arg of rest) {
     if (arg === '--no-hooks') profile = 'nohooks';
+    else if (arg === '--force') force = true;
+    else if (arg === '--use-installed') source = 'installed';
+    else if (arg === '--own') source = 'own';
     else if (arg === '-h' || arg === '--help') command = 'help';
     else if (arg === '-v' || arg === '--version') command = 'version';
     else if (arg.startsWith('-')) {
       throw new Error(`unknown option: ${arg}\nRun \`exciton help\` for usage.`);
     } else names.push(arg);
   }
-  return { command, names, profile, forward };
-}
-
-/**
- * exciton dials agentic workflow frameworks. Refusing anything else is the
- * point, not a limitation: an ordinary plugin is already doing what its owner
- * configured, and exciton has no business overriding it.
- */
-export function assertManaged(resolved: Resolved[]): void {
-  const strays = resolved.filter(r => !isFramework(r.name)).map(r => r.name);
-  if (strays.length === 0) return;
-  throw new Error(
-    `exciton does not manage ${strays.join(', ')}.\n` +
-    `It manages agentic workflow frameworks — currently ${[...FRAMEWORKS].join(', ')} — ` +
-    `because those compete to define how a session is conducted.\n` +
-    `${strays.length > 1 ? 'Those add capabilities' : 'That adds a capability'} rather than ` +
-    `competing, so ${strays.length > 1 ? 'they keep' : 'it keeps'} working exactly as your ` +
-    `settings already have it. There is nothing to name here.`,
-  );
+  return { command, names, profile, force, ...(source ? { source } : {}), forward };
 }
 
 /**
@@ -130,24 +132,96 @@ export function assertSingleFramework(
   );
 }
 
+/**
+ * Managed settings outrank both --settings and --plugin-dir, so a force-enabled
+ * framework survives the suppression payload while the staged copy is added
+ * alongside it. That session is the precise mixture exciton exists to prevent,
+ * and it would arrive looking like success. Refuse rather than deliver it.
+ */
+export function assertNotEnterpriseLocked(toSuppress: string[], managedIds: string[]): void {
+  const locked = toSuppress.filter(id => managedIds.includes(id));
+  if (locked.length === 0) return;
+  throw new UserError(
+    `${locked.join(', ')} is fixed by enterprise-managed settings`,
+    [
+      'Managed settings outrank every command-line flag, so exciton cannot suppress ' +
+      'it for one session.',
+      'The session you asked for would run your chosen framework and the pinned one ' +
+      'together — the exact mixture exciton exists to prevent — so it is not started. ' +
+      'Ask whoever administers this machine, or run `claude` directly.',
+    ],
+  );
+}
+
+/**
+ * A framework has to be added before it will run.
+ *
+ * The refusal names the exact command that fixes it, and says plainly that
+ * adding is not a global install — that sentence is the whole reason someone
+ * can be asked to run a setup step without feeling ambushed by it.
+ */
+export function assertAdded(name: string, added: string[]): void {
+  if (added.includes(name)) return;
+  throw new UserError(`${name} isn't added yet`, [
+    `Run  ${bold(`exciton add ${name}`)}  to choose how you want it.`,
+    "That isn't a global install. It only affects sessions you start with exciton — " +
+    'your ordinary `claude` sessions stay exactly as they are.',
+  ]);
+}
+
+/** One line, in the shape every other message uses. */
+export function runLine(name: string, profile: Profile): string {
+  const state = profile === 'nohooks' ? 'no-hooks · nothing auto-fires' : 'hooks active';
+  return `  ${cyan(ARROW)}  ${bold(name)} ${dim(`· ${state}`)}`;
+}
+
 export function run(argv: string[]): number {
   const parsed = parseArgs(argv);
   if (parsed.command === 'help') { process.stdout.write(helpText()); return 0; }
   if (parsed.command === 'version') { process.stdout.write(`${versionText()}\n`); return 0; }
+
+  // First contact: walk through what exciton is before doing anything else.
+  // Skipped without a terminal, where no answer could ever arrive.
+  if (!isOnboarded(readRegistry()) && isInteractive() && parsed.command !== 'add') {
+    onboard();
+    // A bare `exciton` that just ran the walkthrough is finished. Falling
+    // through would answer the walkthrough with "name a framework to run",
+    // which reads as a rebuke for having followed it.
+    if (parsed.command === 'run' && parsed.names.length === 0) return 0;
+  }
+
+  if (parsed.command === 'add') {
+    return addCommand(parsed.names, {}, parsed.source ? { source: parsed.source } : {});
+  }
+  if (parsed.command === 'remove') return removeCommand(parsed.names);
+  if (parsed.command === 'update') return updateCommand(parsed.names);
   if (parsed.command === 'list') return listPlugins(process.cwd());
-  if (parsed.command === 'clean') return cleanCache();
-  if (parsed.command === 'fetch') return prefetch(parsed.names);
+  if (parsed.command === 'clean') return cleanCache({ force: parsed.force });
 
   // Naming nothing would launch a session identical to plain `claude`, which
   // is a reason to type `claude`, not `exciton`. Treat it as a usage error.
   if (parsed.names.length === 0) {
-    process.stderr.write(`exciton: name a framework to run.\n\n${helpText()}`);
+    const added = addedNames(readRegistry());
+    process.stderr.write(failure('Name a framework to run', [
+      added.length > 0
+        ? `You have ${added.join(', ')} added.  Try  ${bold(`exciton ${added[0]} --no-hooks`)}`
+        : `Nothing is added yet.  Start with  ${bold('exciton add')}`,
+      dim('Run `exciton help` for the full usage.'),
+    ]));
     return 1;
   }
 
-  const resolved = parsed.names.map(name => resolvePlugin(name));
+  // The registry decides which copy runs: resolving installed-first regardless
+  // would silently ignore a deliberate choice of `own`.
+  const registry = readRegistry();
+  const resolved = parsed.names.map(name => resolvePlugin(
+    name, {}, { ownCopy: registry.frameworks[name.split('@')[0]]?.source === 'own' },
+  ));
   assertManaged(resolved);
   assertSingleFramework(resolved);
+
+  const added = addedNames(registry);
+  for (const r of resolved) assertAdded(r.name, added);
 
   // Suppress every managed framework — including ones not named, which would
   // otherwise keep governing the session — then add the named one back via
@@ -156,20 +230,15 @@ export function run(argv: string[]): number {
   const { ids, managedIds } = collectPluginIds(process.cwd());
   const toSuppress = frameworkIdsIn(ids);
 
-  const clash = toSuppress.filter(id => managedIds.includes(id));
-  if (clash.length > 0) {
-    process.stderr.write(
-      `exciton: ${clash.join(', ')} is fixed by enterprise-managed settings ` +
-      `and cannot be changed for a session\n`,
-    );
-  }
+  assertNotEnterpriseLocked(toSuppress, managedIds);
 
   const pluginDirs = resolved.map(r => stagePlugin(r, parsed.profile));
 
+  // The last line before claude takes the terminal, and the only confirmation
+  // that the session is the one that was asked for — so it states the profile
+  // in both directions rather than staying silent on the default.
   const summary = resolved.map(r => r.name).join(', ');
-  process.stderr.write(
-    `exciton: ${summary}${parsed.profile === 'nohooks' ? ' · no-hooks' : ''}\n`,
-  );
+  process.stderr.write(`${runLine(summary, parsed.profile)}\n`);
 
   const disablePayload = toSuppress.length > 0 ? buildDisablePayload(toSuppress) : '';
   return launch({ disablePayload, pluginDirs, forward: parsed.forward });
@@ -194,7 +263,11 @@ if (isMainModule(import.meta.url, process.argv[1])) {
   try {
     process.exit(run(process.argv.slice(2)));
   } catch (err) {
-    process.stderr.write(`exciton: ${(err as Error).message}\n`);
+    // Errors carry their own presentation; anything else is unexpected, and
+    // dressing it up as a considered refusal would be a lie.
+    process.stderr.write(err instanceof UserError
+      ? err.render()
+      : failure((err as Error).message));
     process.exit(1);
   }
 }

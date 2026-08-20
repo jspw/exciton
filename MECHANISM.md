@@ -140,7 +140,7 @@ Three tiers, first hit wins. **No tier writes to Claude's plugin registry.**
 | Order | Source | Cost |
 |---|---|---|
 | 1 | `~/.claude/plugins/installed_plugins.json` — already on disk | zero download |
-| 2 | marketplace manifest → `git clone --depth 1` at the pinned sha → `~/.exciton/src/<name>/<sha>/` | one clone, cached |
+| 2 | marketplace manifest → newest release tag → `git clone --depth 1 --branch <tag>` → `~/.exciton/src/<name>/<version>/` | one clone, cached |
 | 3 | explicit `exciton https://github.com/obra/superpowers` or `exciton ./dir` | escape hatch |
 
 Local-first means `exciton superpowers` is offline, instant, and uses the version you already have rather than silently changing it. `name@ref` forces tier 2.

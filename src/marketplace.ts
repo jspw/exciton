@@ -3,16 +3,17 @@ import { join } from 'node:path';
 import { marketplacesDir } from './paths.ts';
 
 export type PluginSource =
-  | { kind: 'git'; url: string; sha: string }
+  | { kind: 'git'; url: string }
   | { kind: 'unsupported'; reason: string };
 
-interface Entry { name?: string; source?: { source?: string; url?: string; repo?: string; sha?: string } }
+interface Entry { name?: string; source?: { source?: string; url?: string; repo?: string } }
 
+/** Only the location matters: exciton always takes a framework's newest release. */
 function toSource(entry: Entry): PluginSource {
   const s = entry.source ?? {};
-  if (s.source === 'url' && s.url) return { kind: 'git', url: s.url, sha: s.sha ?? '' };
+  if (s.source === 'url' && s.url) return { kind: 'git', url: s.url };
   if (s.source === 'github' && s.repo) {
-    return { kind: 'git', url: `https://github.com/${s.repo}.git`, sha: s.sha ?? '' };
+    return { kind: 'git', url: `https://github.com/${s.repo}.git` };
   }
   if (s.source === 'command') {
     return {

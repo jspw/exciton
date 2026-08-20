@@ -1,3 +1,5 @@
+import { UserError } from './ui.ts';
+
 /**
  * The agentic workflow frameworks exciton dials.
  *
@@ -13,6 +15,35 @@ export const FRAMEWORKS = new Set(['superpowers']);
 
 export function isFramework(name: string): boolean {
   return FRAMEWORKS.has(name);
+}
+
+/**
+ * The single refusal, shared by every path that can be handed a name: running
+ * one and caching one have to answer identically, or the tool contradicts
+ * itself about what it supports.
+ */
+export function unmanagedError(strays: string[]): Error {
+  const many = strays.length > 1;
+  return new UserError(
+    `exciton doesn't manage ${strays.join(', ')}`,
+    [
+      `It manages agentic workflow frameworks — currently ${[...FRAMEWORKS].join(', ')} — ` +
+      `because those compete to define how a session is conducted.`,
+      `${many ? 'These add capabilities' : 'This adds a capability'} rather than competing, ` +
+      `so ${many ? 'they keep' : 'it keeps'} working exactly as your settings already have ` +
+      `${many ? 'them' : 'it'}. There's nothing to name here.`,
+    ],
+  );
+}
+
+/**
+ * exciton dials agentic workflow frameworks. Refusing anything else is the
+ * point, not a limitation: an ordinary plugin is already doing what its owner
+ * configured, and exciton has no business overriding it.
+ */
+export function assertManaged(resolved: { name: string }[]): void {
+  const strays = resolved.filter(r => !isFramework(r.name)).map(r => r.name);
+  if (strays.length > 0) throw unmanagedError(strays);
 }
 
 /**

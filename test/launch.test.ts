@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildClaudeArgs, launch } from '../src/launch.ts';
+import { UserError } from '../src/ui.ts';
 
 const PAYLOAD = '{"enabledPlugins":{"a@m":false}}';
 
@@ -54,9 +55,13 @@ test('launch returns the child exit status', () => {
 });
 
 test('a missing claude binary produces an actionable error', () => {
-  assert.throws(
-    () => launch({ disablePayload: PAYLOAD, pluginDirs: [], forward: [] },
-      () => ({ status: null, error: Object.assign(new Error('spawn'), { code: 'ENOENT' }) })),
-    /claude.*PATH/i,
-  );
+  let text = '';
+  try {
+    launch({ disablePayload: PAYLOAD, pluginDirs: [], forward: [] },
+      () => ({ status: null, error: Object.assign(new Error('spawn'), { code: 'ENOENT' }) }));
+  } catch (e) {
+    text = e instanceof UserError ? e.render() : String((e as Error).message);
+  }
+  assert.match(text, /could not run/i);
+  assert.match(text, /PATH/);
 });

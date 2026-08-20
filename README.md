@@ -4,10 +4,15 @@
 
 ```sh
 npm i -g exciton
+exciton                          # walks you through it, once
 
 exciton superpowers --no-hooks   # skills stay callable, nothing auto-fires
 exciton superpowers              # the full framework, exactly as upstream ships it
 ```
+
+The first run explains what exciton is and lets you add the frameworks you want —
+zero, one, or several. **Adding is not a global install:** nothing under `~/.claude`
+is ever written, and your ordinary `claude` sessions are untouched.
 
 An *exciton* is a bound electron–hole pair: it exists only while the system is excited, only inside the medium, and when it recombines the material is exactly as it was. That is what this does — a configuration that lives for one session and leaves your setup untouched.
 
@@ -32,19 +37,25 @@ PROFILES
   --no-hooks     skills stay callable, nothing auto-fires
 
 COMMANDS
-  list           installed plugins, and which ones auto-fire
-  fetch <name>   warm the cache so a later run is instant and works offline
-  clean          empty exciton's cache
+  add [name]     add a framework, choosing which copy it runs from
+                 (--use-installed / --own skip the question)
+  remove <name>  take a framework back out
+  update [name]  refresh exciton's own copies to the newest release
+  list           what is added, and which plugins auto-fire
+  clean          empty exciton's cache (refused while a session is using it)
   help, version
 
 EXAMPLES
   exciton superpowers --no-hooks            skills on the shelf, no ceremony
   exciton superpowers --no-hooks -- -c      ...and continue your last session
-  exciton superpowers@6.2.0                 a pinned ref
+  exciton superpowers@claude-plugins-official   the full plugin id also works
   exciton ./my-superpowers-fork             a local checkout, judged by its manifest
 ```
 
 `xc` is installed as a short alias for the same binary.
+
+A framework has to be **added** before it will run. That is the one setup step, and
+it is where exciton explains itself rather than assuming you already agree.
 
 ## What it touches, and what it doesn't
 
@@ -73,6 +84,15 @@ For `--no-hooks`, exciton stages a copy of the framework with its `hooks/` direc
 **Nothing under `~/.claude` is ever written.** exciton reads your Claude Code configuration and writes only inside `~/.exciton/`. It never runs `claude plugin install`, because installing a plugin enables it globally — the exact problem this exists to avoid. Quit exciton, run `claude`, and it behaves as it always did.
 
 Full detail, including the verification log: [MECHANISM.md](MECHANISM.md).
+
+## Versions
+
+exciton does not offer a choice of versions, deliberately. A framework is either
+the copy Claude already has — which Claude keeps current — or exciton's own copy
+at the newest release, refreshed with `exciton update`. Choosing between releases
+of the same framework is a question almost nobody needs answered, and carrying it
+would cost a `@ref` syntax that collides with Claude's own `name@marketplace`
+plugin ids.
 
 ## Requirements
 

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { UserError } from './ui.ts';
 
 export interface LaunchPlan {
   disablePayload: string;
@@ -32,7 +33,9 @@ export function launch(plan: LaunchPlan, spawn: SpawnFn = realSpawn): number {
   const { status, error } = spawn('claude', buildClaudeArgs(plan));
   if (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error('could not run `claude` — is Claude Code installed and on your PATH?');
+      throw new UserError('Could not run `claude`', [
+        'Claude Code does not appear to be installed, or is not on your PATH.',
+      ]);
     }
     throw error;
   }
