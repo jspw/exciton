@@ -10,6 +10,8 @@ exciton superpowers --no-hooks   # skills stay callable, nothing auto-fires
 exciton superpowers              # the full framework, exactly as upstream ships it
 ```
 
+![exciton's first-run walkthrough: adding superpowers, choosing which copy to run](./assets/onboarding.png)
+
 The first run explains what exciton is and lets you add the frameworks you want —
 zero, one, or several. **Adding is not a global install:** nothing under `~/.claude`
 is ever written, and your ordinary `claude` sessions are untouched.
